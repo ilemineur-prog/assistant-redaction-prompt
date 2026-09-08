@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Générateur de Prompts de Révision</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #E5AF2E 0%, #DD6E2A 14%, #D71B78 28%, #75427F 42%, #2167A8 56%, #44C0E0 70%, #A1BC1E 100%);
+      min-height: 100vh;
+      padding: 20px;
+      line-height: 1.5;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 15px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+      padding: 40px;
+    }
+    h1 { text-align: center; color: #75427F; margin-bottom: 25px; font-size: 2em; }
+
+    .toolbar {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 15px;
+    }
+    .draft-status {
+      font-size: 0.9em;
+      color: #5a5a5a;
+      text-align: center;
+      min-height: 1.3em;
+      margin-bottom: 15px;
+    }
+    .btn-reset {
+      background: white;
+      color: #D71B78;
+      border: 2px solid #D71B78;
+      padding: 10px 22px;
+      font-size: 0.95em;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-weight: 600;
+      min-height: 44px;
+    }
+    .btn-reset:hover { background: #D71B78; color: white; }
+    .btn-reset:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible {
+      outline: 3px solid #2167A8;
+      outline-offset: 2px;
+    }
+
+    .step { margin-bottom: 35px; padding: 25px; background: #f9f9f9; border-radius: 10px; border-left: 5px solid #D71B78; }
+    .step-header { display: flex; align-items: center; margin-bottom: 15px; }
+    .step-number {
+      background: linear-gradient(135deg, #D71B78, #75427F);
+      color: white; width: 40px; height: 40px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: bold; margin-right: 15px; font-size: 1.2em; flex-shrink: 0;
+    }
+    .step-title { color: #75427F; font-size: 1.4em; font-weight: bold; }
+    .explanation { background: white; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 3px solid #44C0E0; color: #333; line-height: 1.6; }
+
+    .examples-container { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 15px 0; }
+    .bad-example { background: #ffe6e6; padding: 15px; border-radius: 8px; border: 3px solid #dc3545; }
+    .bad-example-header { font-weight: bold; color: #a71d2a; margin-bottom: 10px; font-size: 1.05em; }
+    .bad-example-header::before { content: "✗ "; }
+    .good-example { background: #e6f7e6; padding: 15px; border-radius: 8px; border: 3px solid #28a745; }
+    .good-example-header { font-weight: bold; color: #1e7e34; margin-bottom: 10px; font-size: 1.05em; }
+    .good-example-header::before { content: "✓ "; }
+    .example-text { color: #333; line-height: 1.5; }
+
+    label { display: block; margin: 15px 0 8px 0; color: #1c4f75; font-weight: 600; font-size: 1em; }
+    input[type="text"], textarea {
+      width: 100%; padding: 12px; border: 2px solid #767676; border-radius: 6px;
+      font-size: 1em; transition: border-color 0.2s; font-family: inherit;
+    }
+    input[type="text"]:focus, textarea:focus { outline: none; border-color: #2167A8; box-shadow: 0 0 0 3px rgba(33,103,168,0.25); }
+    textarea { min-height: 100px; resize: vertical; }
+
+    .checkbox-group { background: white; padding: 10px 15px; border-radius: 8px; margin: 15px 0; }
+    .checkbox-item {
+      display: flex; align-items: flex-start; margin: 4px 0; padding: 10px;
+      border-radius: 4px; transition: background 0.15s;
+    }
+    .checkbox-item:hover, .checkbox-item:focus-within { background: #eef3f8; }
+    .checkbox-item input[type="checkbox"] {
+      margin-right: 12px; margin-top: 2px; width: 22px; height: 22px; cursor: pointer; flex-shrink: 0;
+    }
+    .checkbox-item label { margin: 0; cursor: pointer; font-weight: normal; color: #222; }
+
+    .counter { font-size: 0.9em; color: #555; margin-top: 6px; font-style: italic; }
+
+    .reminder-box { background: #fff3cd; border: 2px solid #ffc107; padding: 15px; border-radius: 8px; margin: 15px 0; color: #6b5200; }
+    .reminder-box strong { color: #6b5200; }
+
+    .warning-box {
+      background: linear-gradient(135deg, #c23a4f, #a5203a);
+      color: white; padding: 20px; border-radius: 10px; margin: 30px 0;
+      box-shadow: 0 4px 15px rgba(165, 32, 58, 0.3); text-align: center; font-size: 1.05em; line-height: 1.6;
+    }
+    .warning-box strong { font-size: 1.1em; display: block; margin-bottom: 10px; }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #2167A8, #1a4f80);
+      color: white; border: none; padding: 16px 40px; font-size: 1.1em;
+      border-radius: 8px; cursor: pointer; display: block; margin: 30px auto;
+      transition: all 0.2s; font-weight: bold; box-shadow: 0 4px 15px rgba(33, 103, 168, 0.3);
+      min-height: 48px; width: 100%; max-width: 340px;
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(33, 103, 168, 0.4); }
+
+    .btn-secondary, .btn-improve {
+      color: white; border: none; padding: 13px 28px; font-size: 1em;
+      border-radius: 6px; cursor: pointer; margin: 8px 6px; transition: all 0.2s;
+      min-height: 44px; font-weight: 600;
+    }
+    .btn-secondary { background: #6f8a17; }
+    .btn-secondary:hover { background: #5a7112; transform: translateY(-2px); }
+    .btn-improve { background: #75427F; }
+    .btn-improve:hover { background: #5e3566; transform: translateY(-2px); }
+
+    #result { display: none; margin-top: 30px; padding: 25px; background: #f9f9f9; border-radius: 10px; border: 2px solid #6f8a17; }
+    #promptOutput {
+      background: white; padding: 20px; border-radius: 8px; white-space: pre-wrap;
+      font-family: 'Courier New', monospace; font-size: 0.95em; line-height: 1.6;
+      max-height: 500px; overflow-y: auto; border: 1px solid #ddd;
+    }
+    .error { background: #f8d7da; color: #58151c; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #dc3545; }
+
+    @media (max-width: 768px) {
+      body { padding: 10px; }
+      .container { padding: 20px 16px; }
+      h1 { font-size: 1.4em; }
+      .step { padding: 15px; }
+      .step-title { font-size: 1.15em; }
+      .examples-container { grid-template-columns: 1fr; }
+      .btn-primary { width: 100%; max-width: none; }
+      .btn-secondary, .btn-improve { width: 100%; margin: 6px 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎓 Générateur de Prompts de Révision</h1>
+
+    <div class="toolbar">
+      <button type="button" class="btn-reset" onclick="confirmReset()">↺ Réinitialiser le formulaire</button>
+    </div>
+    <p class="draft-status" id="draftStatus" role="status" aria-live="polite"></p>
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-number" aria-hidden="true">1</div>
+        <div class="step-title">Quelle matière souhaites-tu réviser ?</div>
+      </div>
+      <label for="matiere">Indique le cours que tu souhaites réviser :</label>
+      <input type="text" id="matiere" placeholder="Exemple : Droit constitutionnel, Mathématiques, Histoire...">
+      <label for="partieCours">Précise la partie du cours que tu veux réviser :</label>
+      <input type="text" id="partieCours" placeholder="Exemple : chapitre, concept, etc...">
+    </div>
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-number" aria-hidden="true">2</div>
+        <div class="step-title">Quel rôle doit jouer l'IA ?</div>
+      </div>
+      <div class="explanation">Tout bon prompt commence par définir qui est l'IA. Indique le rôle joué par ton assistant en précisant son domaine de spécialisation, d'intervention. Plus tu es spécifique sur son rôle, plus l'IA pourra t'aider.</div>
+      <div class="examples-container">
+        <div class="bad-example"><div class="bad-example-header">Mauvais exemple</div><div class="example-text">Tu es un assistant.</div></div>
+        <div class="good-example"><div class="good-example-header">Bon exemple</div><div class="example-text">Tu es un professeur de droit expérimenté, spécialisé en droit constitutionnel belge, avec 15 ans d'expérience dans l'enseignement supérieur.</div></div>
+      </div>
+      <label for="agent">Définis qui doit être l'IA pour t'aider :</label>
+      <textarea id="agent" placeholder="Exemple : Tu es un étudiant à qui je réexplique la matière"></textarea>
+    </div>
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-number" aria-hidden="true">3</div>
+        <div class="step-title">Quelle est ta situation ?</div>
+      </div>
+      <div class="explanation">Le contexte permet à l'IA de comprendre ta situation. Plus tu donnes d'informations sur ton domaine d'étude, ton niveau d'étude, tes objectifs et tes difficultés, mieux elle pourra adapter ses réponses.</div>
+      <label for="domaineNiveau">Décris ton domaine et ton niveau d'étude :</label>
+      <textarea id="domaineNiveau" placeholder="Exemple : Je suis étudiant en 1ère année de bachelier en droit..."></textarea>
+      <label for="objectifDifficultes">Décris ton objectif et les difficultés que tu rencontres :</label>
+      <textarea id="objectifDifficultes" placeholder="Exemple : Je prépare mon examen de janvier et j'ai des difficultés..."></textarea>
+    </div>
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-number" aria-hidden="true">4</div>
+        <div class="step-title">Quelles tâches doit accomplir l'IA ?</div>
+      </div>
+      <label id="activitiesLabel">Choisis le type d'activité de révision (2 maximum) :</label>
+      <div class="checkbox-group" role="group" aria-labelledby="activitiesLabel">
+        <div class="checkbox-item"><input type="checkbox" id="a1" value="Améliorer la compréhension" class="activity-checkbox"><label for="a1">Améliorer la compréhension</label></div>
+        <div class="checkbox-item"><input type="checkbox" id="a2" value="Réviser la structure" class="activity-checkbox"><label for="a2">Réviser la structure</label></div>
+        <div class="checkbox-item"><input type="checkbox" id="a3" value="Vocabulaire : textes à trous" class="activity-checkbox"><label for="a3">Vocabulaire : textes à trous</label></div>
+        <div class="checkbox-item"><input type="checkbox" id="a4" value="Vocabulaire : flashcards" class="activity-checkbox"><label for="a4">Vocabulaire : flashcards</label></div>
+        <div class="checkbox-item"><input type="checkbox" id="a5" value="Compléter un tableau" class="activity-checkbox"><label for="a5">Compléter un tableau</label></div>
+        <div class="checkbox-item"><input type="checkbox" id="a6" value="Quiz vrai ou faux" class="activity-checkbox"><label for="a6">Quiz vrai ou faux</label></div>
+        <div class="checkbox-item"><input type="checkbox" id="a7" value="QCM avec plusieurs propositions" class="activity-checkbox"><label for="a7">QCM avec plusieurs propositions</label></div>
+        <div class="checkbox-item"><input type="checkbox" id="a8" value="QRM tout ou rien" class="activity-checkbox"><label for="a8">QRM tout ou rien</label></div>
+        <div class="checkbox-item"><input type="checkbox" id="a9" value="Comparer plusieurs notions" class="activity-checkbox"><label for="a9">Comparer plusieurs notions</label></div>
+        <div class="checkbox-item"><input type="checkbox" id="a10" value="Recherche d'articles dans le code" class="activity-checkbox"><label for="a10">Recherche d'articles dans le code</label></div>
+        <div class="checkbox-item"><input type="checkbox" id="a11" value="Questions ouvertes de théorie" class="activity-checkbox"><label for="a11">Questions ouvertes de théorie</label></div>
+        <div class="checkbox-item"><input type="checkbox" id="a12" value="Cas pratiques à résoudre" class="activity-checkbox"><label for="a12">Cas pratiques à résoudre</label></div>
+        <div class="checkbox-item"><input type="checkbox" id="a13" value="Améliorer la formulation des réponses aux questions ouvertes" class="activity-checkbox"><label for="a13">Améliorer la formulation des réponses aux questions ouvertes</label></div>
+        <div class="checkbox-item"><input type="checkbox" id="a14" value="Être challengé pour faire des liens entre les différentes parties du cours" class="activity-checkbox"><label for="a14">Être challengé pour faire des liens entre les différentes parties du cours</label></div>
+        <div class="checkbox-item"><input type="checkbox" id="a15" value="Être aidé à rédiger une argumentation" class="activity-checkbox"><label for="a15">Être aidé à rédiger une argumentation</label></div>
+        <div class="checkbox-item"><input type="checkbox" id="a16" value="Être entrainé pour un examen oral" class="activity-checkbox"><label for="a16">Être entrainé pour un examen oral</label></div>
+        <div class="checkbox-item"><input type="checkbox" id="a17" value="Créer une infographie pour imager une partie de cours" class="activity-checkbox"><label for="a17">Créer une infographie pour imager une partie de cours</label></div>
+        <div class="checkbox-item"><input type="checkbox" id="a18" value="Établir un planning de révision" class="activity-checkbox"><label for="a18">Établir un planning de révision</label></div>
+      </div>
+      <div class="counter" id="activityCounter" aria-live="polite">0 / 2 activité(s) sélectionnée(s)</div>
+      <div class="reminder-box"><strong>⚠️ Important :</strong> N'oublie pas de joindre ton support de cours à ton prompt.</div>
+    </div>
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-number" aria-hidden="true">5</div>
+        <div class="step-title">Quelles sont les contraintes que l'IA doit respecter ?</div>
+      </div>
+      <label id="constraintsLabel">Choisis les contraintes que l'IA doit respecter :</label>
+      <div class="checkbox-group" id="step5-constraints" role="group" aria-labelledby="constraintsLabel">
+        <div class="checkbox-item"><input type="checkbox" id="c1" value="Quand tu ignores la réponse, n'invente pas" checked><label for="c1">Quand tu ignores la réponse, n'invente pas</label></div>
+        <div class="checkbox-item"><input type="checkbox" id="c2" value="N'utilise que le ou les document(s) joint(s)"><label for="c2">N'utilise que le ou les document(s) joint(s)</label></div>
+        <div class="checkbox-item"><input type="checkbox" id="c3" value="N'utilise pas internet"><label for="c3">N'utilise pas internet</label></div>
+        <div class="checkbox-item"><input type="checkbox" id="c4" value="Ne donne pas immédiatement la bonne réponse, donne-moi des indices pour avancer"><label for="c4">Ne donne pas immédiatement la bonne réponse, donne-moi des indices pour avancer</label></div>
+        <div class="checkbox-item"><input type="checkbox" id="c5" value="Indique-moi où la matière est expliquée dans le cours"><label for="c5">Indique-moi où la matière est expliquée dans le cours</label></div>
+        <div class="checkbox-item"><input type="checkbox" id="c6" value="Replace la réponse dans la structure du cours lorsque tu me corriges"><label for="c6">Replace la réponse dans la structure du cours lorsque tu me corriges</label></div>
+        <div class="checkbox-item"><input type="checkbox" id="c7" value="Rappelle-moi la signification des concepts"><label for="c7">Rappelle-moi la signification des concepts</label></div>
+        <div class="checkbox-item"><input type="checkbox" id="c8" value="Donne-moi des exemples concrets"><label for="c8">Donne-moi des exemples concrets</label></div>
+        <div class="checkbox-item"><input type="checkbox" id="c9" value="Utilise un registre de langage plus facile à comprendre"><label for="c9">Utilise un registre de langage plus facile à comprendre</label></div>
+        <div class="checkbox-item"><input type="checkbox" id="c10" value="Maintiens le registre de langage du cours dans tes réponses"><label for="c10">Maintiens le registre de langage du cours dans tes réponses</label></div>
+      </div>
+      <label for="contraintesPerso">Pour d'autres contraintes :</label>
+      <textarea id="contraintesPerso" placeholder="Exemple : Pose une question à la fois..."></textarea>
+    </div>
+
+    <div class="step">
+      <div class="step-header">
+        <div class="step-number" aria-hidden="true">6</div>
+        <div class="step-title">Donne à l'IA des exemples à suivre</div>
+      </div>
+      <div class="explanation">L'illustration montre à l'IA le format ou le style que tu attends.</div>
+      <div class="examples-container">
+        <div class="bad-example"><div class="bad-example-header">Mauvais exemple</div><div class="example-text">Fais quelque chose de bien.</div></div>
+        <div class="good-example"><div class="good-example-header">Bon exemple</div><div class="example-text">Voici un exemple du format souhaité : Question : Qu'est-ce que...</div></div>
+      </div>
+      <label for="illustration">Donne un exemple :</label>
+      <textarea id="illustration" placeholder="Exemple : Je joins à mon prompt l'examen de l'année dernière"></textarea>
+    </div>
+
+    <div class="warning-box"><strong>⚠️ Important à retenir</strong> Le prompt généré doit être testé. Il ne répond peut-être pas à tes attentes.</div>
+
+    <button type="button" class="btn-primary" id="generateBtn" onclick="generatePrompt()">✨ Générer mon prompt</button>
+
+    <div id="result">
+      <h2 style="color: #75427F; margin-bottom: 20px;">📋 Ton prompt est prêt !</h2>
+      <div id="promptOutput" role="status" aria-live="polite"></div>
+      <div style="text-align: center; margin-top: 20px;">
+        <button type="button" class="btn-secondary" onclick="copyPrompt()">📋 Copier le prompt</button>
+        <button type="button" class="btn-improve" onclick="improvePrompt()">✨ Améliorer le prompt avec Gemini</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ---------- Configuration ----------
+    var DRAFT_KEY = 'revisionPromptDraft_v2';
+    var TEXT_FIELD_IDS = [
+      'matiere', 'partieCours', 'agent', 'domaineNiveau', 'objectifDifficultes',
+      'contraintesPerso', 'illustration'
+    ];
+    var MAX_ACTIVITIES = 2;
+    var saveTimer = null;
+
+    // ---------- Sauvegarde automatique du brouillon ----------
+    function storageAvailable() {
+      try {
+        var testKey = '__storage_test__';
+        window.localStorage.setItem(testKey, '1');
+        window.localStorage.removeItem(testKey);
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    var hasStorage = storageAvailable();
+
+    function collectDraft() {
+      var draft = { fields: {}, activities: [], constraints: [] };
+      TEXT_FIELD_IDS.forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) draft.fields[id] = el.value;
+      });
+      draft.activities = getSelectedActivities();
+      draft.constraints = getSelectedConstraints();
+      return draft;
+    }
+
+    function saveDraft() {
+      if (!hasStorage) return;
+      try {
+        window.localStorage.setItem(DRAFT_KEY, JSON.stringify(collectDraft()));
+        setDraftStatus('Brouillon enregistré automatiquement ✓');
+      } catch (e) {
+        // Stockage indisponible ou plein : on ignore silencieusement.
+      }
+    }
+
+    function scheduleSave() {
+      if (!hasStorage) return;
+      window.clearTimeout(saveTimer);
+      saveTimer = window.setTimeout(saveDraft, 500);
+    }
+
+    function setDraftStatus(msg) {
+      var el = document.getElementById('draftStatus');
+      if (el) el.textContent = msg || '';
+    }
+
+    function restoreDraft() {
+      if (!hasStorage) return;
+      var raw;
+      try {
+        raw = window.localStorage.getItem(DRAFT_KEY);
+      } catch (e) {
+        return;
+      }
+      if (!raw) return;
+      var draft;
+      try {
+        draft = JSON.parse(raw);
+      } catch (e) {
+        return;
+      }
+      if (!draft || typeof draft !== 'object') return;
+
+      if (draft.fields) {
+        TEXT_FIELD_IDS.forEach(function (id) {
+          var el = document.getElementById(id);
+          if (el && typeof draft.fields[id] === 'string') el.value = draft.fields[id];
+        });
+      }
+      if (Array.isArray(draft.activities)) {
+        draft.activities.forEach(function (value) {
+          var checkbox = document.querySelector('.activity-checkbox[value="' + cssEscape(value) + '"]');
+          if (checkbox) checkbox.checked = true;
+        });
+      }
+      if (Array.isArray(draft.constraints)) {
+        document.querySelectorAll('#step5-constraints input[type="checkbox"]').forEach(function (c) {
+          c.checked = draft.constraints.indexOf(c.value) !== -1;
+        });
+      }
+      updateActivityCounter();
+      setDraftStatus('Brouillon précédent restauré.');
+    }
+
+    function cssEscape(value) {
+      if (window.CSS && window.CSS.escape) return window.CSS.escape(value);
+      return String(value).replace(/["\\]/g, '\\$&');
+    }
+
+    function clearDraft() {
+      if (!hasStorage) return;
+      try {
+        window.localStorage.removeItem(DRAFT_KEY);
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    // ---------- Réinitialisation du formulaire ----------
+    function confirmReset() {
+      if (window.confirm('Es-tu sûr·e de vouloir réinitialiser le formulaire ? Toutes les réponses saisies seront effacées.')) {
+        resetForm();
+      }
+    }
+
+    function resetForm() {
+      TEXT_FIELD_IDS.forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+      document.querySelectorAll('.checkbox-group input[type="checkbox"]').forEach(function (cb) {
+        cb.checked = false;
+      });
+      // "Quand tu ignores la réponse, n'invente pas" reste coché par défaut après reset
+      var c1 = document.getElementById('c1');
+      if (c1) c1.checked = true;
+      updateActivityCounter();
+      clearDraft();
+      document.getElementById('result').style.display = 'none';
+      document.getElementById('promptOutput').textContent = '';
+      setDraftStatus('Formulaire réinitialisé.');
+      document.getElementById('matiere').focus();
+    }
+
+    // ---------- Cases à cocher : activités (max 2) ----------
+    function updateActivityCounter() {
+      var checkedCount = document.querySelectorAll('.activity-checkbox:checked').length;
+      var counter = document.getElementById('activityCounter');
+      if (counter) counter.textContent = checkedCount + ' / ' + MAX_ACTIVITIES + ' activité(s) sélectionnée(s)';
+    }
+
+    function initActivityCheckboxes() {
+      var activityCheckboxes = document.querySelectorAll('.activity-checkbox');
+      activityCheckboxes.forEach(function (checkbox) {
+        checkbox.addEventListener('change', function () {
+          var checkedCount = document.querySelectorAll('.activity-checkbox:checked').length;
+          if (checkedCount > MAX_ACTIVITIES) {
+            this.checked = false;
+            window.alert('⚠️ Tu ne peux sélectionner que ' + MAX_ACTIVITIES + ' activités maximum.');
+          }
+          updateActivityCounter();
+        });
+      });
+    }
+
+    function getSelectedConstraints() {
+      var constraints = [];
+      document.querySelectorAll('#step5-constraints input[type="checkbox"]:checked').forEach(function (c) {
+        constraints.push(c.value);
+      });
+      return constraints;
+    }
+
+    function getSelectedActivities() {
+      var activities = [];
+      document.querySelectorAll('.activity-checkbox:checked').forEach(function (c) {
+        activities.push(c.value);
+      });
+      return activities;
+    }
+
+    // ---------- Génération du prompt (100% côté client, sans backend) ----------
+    // Aucun champ n'est obligatoire : l'absence de réponse n'empêche jamais
+    // la génération. Chaque section n'apparaît que si elle contient une info.
+    function buildPrompt(data) {
+      var lines = [];
+      lines.push('# PROMPT DE RÉVISION');
+      lines.push('');
+
+      if (data.agent) {
+        lines.push('## 🎯 AGENT');
+        lines.push(data.agent);
+        lines.push('');
+      }
+
+      if (data.matiere || data.partieCours) {
+        lines.push('## 📚 MATIÈRE');
+        if (data.matiere) lines.push(data.matiere);
+        if (data.partieCours) lines.push('Partie du cours à réviser : ' + data.partieCours);
+        lines.push('');
+      }
+
+      if (data.domaineNiveau || data.objectifDifficultes) {
+        lines.push('## 📋 CONTEXTE');
+        if (data.domaineNiveau) {
+          lines.push('### Domaine et niveau d\'étude');
+          lines.push(data.domaineNiveau);
+          lines.push('');
+        }
+        if (data.objectifDifficultes) {
+          lines.push('### Objectif et difficultés');
+          lines.push(data.objectifDifficultes);
+          lines.push('');
+        }
+      }
+
+      if (data.activites && data.activites.length > 0) {
+        lines.push('## 🎯 TÂCHE');
+        lines.push('Types d\'activités : ' + data.activites.join(', '));
+        lines.push('');
+      }
+
+      if (data.contraintes && data.contraintes.length > 0) {
+        lines.push('## ⚠️ CONTRAINTES À RESPECTER');
+        data.contraintes.forEach(function (c) { lines.push('- ' + c); });
+        lines.push('');
+      }
+
+      if (data.contraintesPerso) {
+        lines.push('## 📝 CONTRAINTES PERSONNALISÉES');
+        lines.push(data.contraintesPerso);
+        lines.push('');
+      }
+
+      if (data.illustration) {
+        lines.push('## 💡 ILLUSTRATION / EXEMPLE');
+        lines.push(data.illustration);
+        lines.push('');
+      }
+
+      lines.push('---');
+      lines.push('⚠️ N\'oublie pas de joindre ton support de cours et les autres documents utiles (ex. examen de l\'année précédente) à ce prompt !');
+
+      return lines.join('\n');
+    }
+
+    function generatePrompt() {
+      var promptData = {
+        matiere: document.getElementById('matiere').value.trim(),
+        partieCours: document.getElementById('partieCours').value.trim(),
+        agent: document.getElementById('agent').value.trim(),
+        domaineNiveau: document.getElementById('domaineNiveau').value.trim(),
+        objectifDifficultes: document.getElementById('objectifDifficultes').value.trim(),
+        activites: getSelectedActivities(),
+        contraintes: getSelectedConstraints(),
+        contraintesPerso: document.getElementById('contraintesPerso').value.trim(),
+        illustration: document.getElementById('illustration').value.trim()
+      };
+
+      var prompt = buildPrompt(promptData);
+      document.getElementById('result').style.display = 'block';
+      document.getElementById('promptOutput').textContent = prompt;
+      document.getElementById('result').scrollIntoView({ behavior: 'smooth' });
+      saveDraft();
+    }
+
+    // ---------- Copier le prompt ----------
+    function copyPrompt() {
+      var promptText = document.getElementById('promptOutput').textContent;
+      if (!promptText) return;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(promptText).then(function () {
+          window.alert('✅ Prompt copié !');
+        }).catch(function () {
+          fallbackCopyTextToClipboard(promptText);
+        });
+      } else {
+        fallbackCopyTextToClipboard(promptText);
+      }
+    }
+
+    function fallbackCopyTextToClipboard(text) {
+      var textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.top = '0';
+      textArea.style.left = '0';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        var successful = document.execCommand('copy');
+        window.alert(successful ? '✅ Prompt copié !' : '❌ Erreur lors de la copie.');
+      } catch (err) {
+        window.alert('❌ Erreur lors de la copie.');
+      }
+      document.body.removeChild(textArea);
+    }
+
+    function improvePrompt() {
+      window.open('https://gemini.google.com/gem/1O3f78SGJBClS5S9WuVR8fUG-cxMunsgr?usp=sharing', '_blank');
+    }
+
+    // ---------- Initialisation ----------
+    document.addEventListener('DOMContentLoaded', function () {
+      initActivityCheckboxes();
+      restoreDraft();
+
+      TEXT_FIELD_IDS.forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener('input', scheduleSave);
+      });
+      document.querySelectorAll('.checkbox-group input[type="checkbox"]').forEach(function (cb) {
+        cb.addEventListener('change', scheduleSave);
+      });
+    });
+  </script>
+</body>
+</html>
